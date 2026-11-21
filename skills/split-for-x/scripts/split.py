@@ -252,8 +252,47 @@ def rounded_mask(w, h, r, ss=4):
     return m.resize((w, h), Image.LANCZOS)
 
 
+ACCOUNT = {}   # filled from --name/--handle/--avatar/--text; empty = generic skeleton header
+
+
+def _font(size, bold=False):
+    names = (["Inter-Bold.otf", "/usr/share/fonts/opentype/inter/Inter-Bold.otf", "DejaVuSans-Bold.ttf", "Arial Bold.ttf"]
+             if bold else
+             ["Inter-Regular.otf", "/usr/share/fonts/opentype/inter/Inter-Regular.otf", "DejaVuSans.ttf", "Arial.ttf"])
+    for n in names:
+        try:
+            return ImageFont.truetype(n, size)
+        except Exception:
+            pass
+    return get_font(size)
+
+
+def _wrap(text, font, max_w):
+    lines = []
+    for para in text.split("\n"):
+        cur = ""
+        for word in para.split(" "):
+            t = (cur + " " + word).strip()
+            if font.getlength(t) <= max_w or not cur:
+                cur = t
+            else:
+                lines.append(cur)
+                cur = word
+        lines.append(cur)
+    return lines
+
+
+def account_header_h():
+    """CSS px height of the header when a real account is shown."""
+    f = _font(15)
+    lines = _wrap(ACCOUNT.get("text", ""), f, X2_COLUMN_PX) if ACCOUNT.get("text") else []
+    return 12 + 20 + 6 + 20 * len(lines) + 12
+
+
 def post_header(height_px):
-    """Generic post header: grey avatar + two grey rounded bars (supersampled)."""
+    """Post header: the user's account (avatar, name, handle, text) when given, else a grey skeleton."""
+    if ACCOUNT:
+        return account_header(height_px)
     ss = 2
     W, H = MOCK_W * ss, height_px * ss
     im = Image.new("RGB", (W, H), MOCK_BG)
@@ -264,6 +303,44 @@ def post_header(height_px):
     cx = MOCK_COL_LEFT * k
     d.rounded_rectangle([cx, 15 * k, cx + 120 * k, 25 * k], radius=5 * k, fill=MOCK_GREY)
     d.rounded_rectangle([cx, 34 * k, cx + 430 * k, 44 * k], radius=5 * k, fill=(41, 44, 47))
+    return im.resize((MOCK_W, height_px), Image.LANCZOS)
+
+
+def account_header(height_px):
+    ss = 2
+    W, H = MOCK_W * ss, height_px * ss
+    k = MOCK_SCALE * ss
+    im = Image.new("RGB", (W, H), MOCK_BG)
+    d = ImageDraw.Draw(im)
+    ax, ay, a = MOCK_PAD * k, 12 * k, MOCK_AVATAR * k
+    av = ACCOUNT.get("avatar")
+    if av:
+        try:
+            src = Image.open(av).convert("RGB")
+            s = min(src.size)
+            src = src.crop(((src.width - s) // 2, (src.height - s) // 2, (src.width + s) // 2, (src.height + s) // 2))
+            src = src.resize((a, a), Image.LANCZOS)
+            m = Image.new("L", (a, a), 0)
+            ImageDraw.Draw(m).ellipse([0, 0, a - 1, a - 1], fill=255)
+            im.paste(src, (ax, ay), m)
+        except Exception:
+            av = None
+    if not av:
+        d.ellipse([ax, ay, ax + a, ay + a], fill=MOCK_GREY)
+    cx = MOCK_COL_LEFT * k
+    fb, fr = _font(15 * k, bold=True), _font(15 * k)
+    name = ACCOUNT.get("name") or ACCOUNT.get("handle") or ""
+    y = 12 * k
+    d.text((cx, y), name, font=fb, fill=(231, 233, 234))
+    hx = cx + fb.getlength(name) + 4 * k
+    handle = ACCOUNT.get("handle")
+    meta = (f"@{handle.lstrip('@')} · now" if handle else "now")
+    d.text((hx, y), meta, font=fr, fill=(113, 118, 123))
+    y += 26 * k
+    if ACCOUNT.get("text"):
+        for line in _wrap(ACCOUNT["text"], fr, X2_COLUMN_PX * k):
+            d.text((cx, y), line, font=fr, fill=(231, 233, 234))
+            y += 20 * k
     return im.resize((MOCK_W, height_px), Image.LANCZOS)
 
 
@@ -371,12 +448,20 @@ source); --fit contain keeps the whole image and fills the rest with --bg.""")
     p.add_argument("--gap", default="auto", help="auto|none|<fraction of panel width>")
     p.add_argument("--format", choices=["jpg", "png"], default="jpg")
     p.add_argument("--max-side", type=int, default=DEFAULT_MAX_SIDE, help="max panel long side px")
+    p.add_argument("--name", help="mockup: display name to show instead of the grey skeleton")
+    p.add_argument("--handle", help="mockup: @handle")
+    p.add_argument("--avatar", help="mockup: path to a profile picture")
+    p.add_argument("--text", help="mockup: the post's text")
     return p
 
 
 def main(argv=None):
     ap = build_parser()
     a = ap.parse_args(argv)
+    global MOCK_HEADER_H
+    if a.name or a.handle or a.avatar or a.text:
+        ACCOUNT.update({k: v for k, v in (("name", a.name), ("handle", a.handle), ("avatar", a.avatar), ("text", a.text)) if v})
+        MOCK_HEADER_H = account_header_h()
     warns = []
     layout = a.layout
     img = load_image(a.image)

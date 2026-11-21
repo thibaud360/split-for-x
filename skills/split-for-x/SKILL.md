@@ -12,6 +12,7 @@ Script: `scripts/split.py` next to this file (Python 3, `pip install pillow nump
 ```
 python split.py IMAGE -o OUT --layout x2|x-carousel|ig-carousel [--panels N] [--aspect 3:4]
                 [--fit cover|contain] [--focus X,Y] [--bg auto|blur|mirror|#hex] [--gap auto|none|F]
+                [--name NAME --handle HANDLE --avatar PIC --text "post text"]
 ```
 It writes `01.jpg`, `02.jpg`… plus `seams.jpg` (the source with the cut lines) and `mockup.jpg` (how the post will look).
 
@@ -55,7 +56,7 @@ Fix and re-run, two passes at most.
 
 ## 4. Deliver
 
-- Send the panels in order and the mockup.
+- Send the panels in order and the mockup. If the user gave their name, handle, profile picture or the post's text, pass them with `--name`, `--handle`, `--avatar` and `--text` so the mockup shows their real post; otherwise it shows a neutral placeholder.
 - Tell the user to upload them **in order 01, 02, 03… in a single post**, and to check the order in the composer before posting.
 - Write one short alt text per panel (what's in that slice). X lets you add it per image, and it helps reach and accessibility.
 - Mention that the gaps were measured on X desktop, and that re-running with `--gap none` fixes things if the phone shows a tiny offset.
